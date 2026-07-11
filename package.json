@@ -1,6 +1,6 @@
 {
   "name": "franktech-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "FrankTech SDK for error monitoring - AI-powered error tracking and analysis",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -21,12 +21,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/franktechspace/franktech-sdk"
+    "url": "git+https://github.com/frankiekoifi/franktech-sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/franktechspace/franktech-sdk/issues"
+    "url": "https://github.com/frankiekoifi/franktech-sdk/issues"
   },
-  "homepage": "https://franktechspace.dev",
+  "homepage": "https://monitor.franktechspace.dev",
   "peerDependencies": {
     "react": ">=16.8.0"
   },
