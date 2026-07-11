@@ -1,0 +1,41 @@
+{
+  "name": "franktech-sdk",
+  "version": "1.0.0",
+  "description": "FrankTech SDK for error monitoring - AI-powered error tracking and analysis",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "scripts": {
+    "test": "echo \"No tests yet\"",
+    "prepublishOnly": "echo \"Preparing for publish\""
+  },
+  "keywords": [
+    "error-monitoring",
+    "error-tracking",
+    "logging",
+    "debugging",
+    "franktech",
+    "ai",
+    "analytics"
+  ],
+  "author": "Francis Ochieng <francisochieng700@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/franktechspace/franktech-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/franktechspace/franktech-sdk/issues"
+  },
+  "homepage": "https://franktechspace.dev",
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

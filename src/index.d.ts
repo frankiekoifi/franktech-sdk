@@ -1,0 +1,53 @@
+// TypeScript definitions for FrankTech SDK
+
+interface FrankTechConfig {
+  apiKey: string;
+  endpoint?: string;
+  environment?: string;
+  release?: string;
+  enabled?: boolean;
+  captureConsole?: boolean;
+  batchSize?: number;
+  flushInterval?: number;
+  user?: {
+    id?: string;
+    email?: string;
+  };
+  onError?: (error: any) => void;
+}
+
+interface ErrorContext {
+  severity?: "critical" | "error" | "warning" | "info";
+  metadata?: Record<string, any>;
+}
+
+interface ErrorData {
+  type: string;
+  message: string;
+  stack_trace?: string;
+  severity: string;
+  url?: string;
+  user_agent?: string;
+  environment: string;
+  release_version: string;
+  user_id?: string;
+  user_email?: string;
+  extra_data: Record<string, any>;
+  created_at: string;
+}
+
+export class FrankTech {
+  constructor(config: FrankTechConfig);
+  setUser(user: { id?: string; email?: string }): void;
+  captureError(error: Error | string, context?: ErrorContext): void;
+  flush(): Promise<void>;
+  destroy(): void;
+}
+
+export function useFrankTech(config: FrankTechConfig): FrankTech;
+export function franktechMiddleware(
+  monitor: FrankTech,
+): (req: any, res: any, next: any) => void;
+export function createFrankTechVuePlugin(config: FrankTechConfig): any;
+
+export default FrankTech;

@@ -1,0 +1,8 @@
+node_modules/
+test/
+*.log
+*.test.js
+.git
+.github
+.vscode
+.idea
