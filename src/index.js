@@ -1,5 +1,3 @@
-// FrankTech SDK - Main entry point
-
 class FrankTech {
   constructor(config) {
     if (!config.apiKey) {
@@ -7,7 +5,7 @@ class FrankTech {
     }
 
     this.apiKey = config.apiKey;
-    this.endpoint = config.endpoint || "https://api.franktechspace.dev";
+    this.endpoint = config.endpoint || "franktech-api.franktechspace.dev";
     this.environment = config.environment || "production";
     this.release = config.release || "unknown";
     this.enabled = config.enabled !== false;
