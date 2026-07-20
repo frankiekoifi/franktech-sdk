@@ -1,3 +1,5 @@
+import * as rrweb from "rrweb";
+
 class FrankTech {
   constructor(config) {
     if (!config.apiKey) {
@@ -5,7 +7,8 @@ class FrankTech {
     }
 
     this.apiKey = config.apiKey;
-    this.endpoint = config.endpoint || "franktech-api.franktechspace.dev";
+    this.endpoint =
+      config.endpoint || "https://franktech-api.franktechspace.dev";
     this.environment = config.environment || "production";
     this.release = config.release || "unknown";
     this.enabled = config.enabled !== false;
@@ -18,20 +21,109 @@ class FrankTech {
     this.user = config.user || null;
     this.onError = config.onError || null;
 
+    this.enableReplay = config.enableReplay !== false;
+    this.replaySampleRate = config.replaySampleRate || 1.0;
+    this.replayMaskInputs = config.replayMaskInputs !== false;
+    this.replayBlockClass = config.replayBlockClass || "franktech-block";
+    this.replayMaxDuration = config.replayMaxDuration || 60000;
+    this.replayEvents = [];
+    this.replayRecording = false;
+    this.replayStopFn = null;
+
     if (this.enabled) {
       this.setupGlobalHandlers();
       this.startBackgroundFlush();
+      if (this.enableReplay && typeof window !== "undefined") {
+        this.initReplayRecording();
+      }
     }
   }
 
-  // Set user context
   setUser(user) {
     this.user = user;
   }
 
-  // Capture error manually
+  async initReplayRecording() {
+    if (this.replayRecording || !this.enableReplay) return;
+    if (Math.random() > this.replaySampleRate) return;
+
+    try {
+      this.replayRecording = true;
+      this.replayEvents = [];
+
+      this.replayStopFn = rrweb.record({
+        emit: (event) => {
+          this.replayEvents.push(event);
+          if (this.replayEvents.length > 2000) {
+            this.replayEvents.shift();
+          }
+        },
+        maskAllInputs: this.replayMaskInputs,
+        blockClass: this.replayBlockClass,
+      });
+
+      setTimeout(() => {
+        this.stopReplayRecording();
+      }, this.replayMaxDuration);
+    } catch (err) {
+      console.warn("FrankTech: Failed to initialize session replay:", err);
+      this.replayRecording = false;
+    }
+  }
+
+  stopReplayRecording() {
+    if (this.replayStopFn) {
+      this.replayStopFn();
+      this.replayStopFn = null;
+    }
+    this.replayRecording = false;
+  }
+
+  getReplayData() {
+    if (!this.enableReplay || this.replayEvents.length === 0) {
+      return null;
+    }
+
+    const now = Date.now();
+    const cutoff = now - 30000;
+    const recentEvents = this.replayEvents.filter((e) => e.timestamp > cutoff);
+
+    if (recentEvents.length === 0) return null;
+
+    return {
+      events: recentEvents,
+      startTimestamp: recentEvents[0]?.timestamp || now,
+      endTimestamp: recentEvents[recentEvents.length - 1]?.timestamp || now,
+    };
+  }
+
+  getReplayEvents() {
+    return this.replayEvents;
+  }
+
+  clearReplayEvents() {
+    this.replayEvents = [];
+  }
+
+  isReplayEnabled() {
+    return this.enableReplay;
+  }
+
+  isReplayRecording() {
+    return this.replayRecording;
+  }
+
   captureError(error, context = {}) {
     if (!this.enabled) return;
+
+    let replayData = null;
+    if (this.enableReplay && this.replayRecording) {
+      replayData = this.getReplayData();
+      this.stopReplayRecording();
+      setTimeout(() => {
+        this.initReplayRecording();
+      }, 1000);
+    }
 
     const errorData = {
       type: error.name || "Error",
@@ -46,18 +138,17 @@ class FrankTech {
       user_id: this.user?.id,
       user_email: this.user?.email,
       extra_data: context.metadata || {},
+      session_replay: replayData,
       created_at: new Date().toISOString(),
     };
 
     this.enqueue(errorData);
 
-    // Call custom error handler if provided
     if (this.onError) {
       this.onError(errorData);
     }
   }
 
-  // Queue error for sending
   enqueue(errorData) {
     this.queue.push(errorData);
     if (this.queue.length >= this.batchSize) {
@@ -65,46 +156,40 @@ class FrankTech {
     }
   }
 
-  // Send errors to FrankTech API
   async flush() {
     if (this.queue.length === 0) return;
 
     const batch = this.queue.splice(0);
 
     try {
-      const response = await fetch(`${this.endpoint}/api/v1/errors/`, {
+      const response = await fetch(`${this.endpoint}/api/v1/errors`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
+          "X-API-Key": this.apiKey,
         },
         body: JSON.stringify(batch),
       });
 
       if (!response.ok) {
         console.warn("FrankTech: Failed to send errors:", response.status);
-        // Re-queue on failure
         setTimeout(() => {
           this.queue = [...batch, ...this.queue];
         }, 5000);
       }
     } catch (err) {
       console.warn("FrankTech: Network error, events queued for retry");
-      // Re-queue
       this.queue = [...batch, ...this.queue];
     }
   }
 
-  // Setup global error handlers
   setupGlobalHandlers() {
     if (typeof window === "undefined") return;
 
-    // Unhandled promise rejections
     window.addEventListener("unhandledrejection", (event) => {
       this.captureError(event.reason, { severity: "error" });
     });
 
-    // Global errors
     window.addEventListener("error", (event) => {
       this.captureError(event.error || new Error(event.message), {
         severity: "error",
@@ -116,7 +201,6 @@ class FrankTech {
       });
     });
 
-    // Console errors
     if (this.captureConsole) {
       const originalError = console.error;
       console.error = (...args) => {
@@ -129,19 +213,17 @@ class FrankTech {
     }
   }
 
-  // Start background flush
   startBackgroundFlush() {
     this.flushTimer = setInterval(() => this.flush(), this.flushInterval);
   }
 
-  // Clean up
   destroy() {
     if (this.flushTimer) clearInterval(this.flushTimer);
+    this.stopReplayRecording();
     this.flush();
   }
 }
 
-// React Hook (optional)
 export function useFrankTech(config) {
   const [monitor] = React.useState(() => new FrankTech(config));
   React.useEffect(() => {
@@ -150,12 +232,9 @@ export function useFrankTech(config) {
   return monitor;
 }
 
-// Express middleware
 export function franktechMiddleware(monitor) {
   return (req, res, next) => {
     const start = Date.now();
-
-    // Store original end
     const originalEnd = res.end;
 
     res.end = function (...args) {
@@ -188,7 +267,6 @@ export function franktechMiddleware(monitor) {
   };
 }
 
-// Vue plugin (optional)
 export function createFrankTechVuePlugin(config) {
   return {
     install(app) {

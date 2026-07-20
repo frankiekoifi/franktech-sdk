@@ -14,11 +14,31 @@ interface FrankTechConfig {
     email?: string;
   };
   onError?: (error: any) => void;
+
+  // Session Replay options
+  enableReplay?: boolean;
+  replaySampleRate?: number;
+  replayMaskInputs?: boolean;
+  replayBlockClass?: string;
+  replayMaxDuration?: number;
 }
 
 interface ErrorContext {
   severity?: "critical" | "error" | "warning" | "info";
   metadata?: Record<string, any>;
+}
+
+interface ReplayEvent {
+  type: number;
+  data: any;
+  timestamp: number;
+  [key: string]: any;
+}
+
+interface ReplayData {
+  events: ReplayEvent[];
+  startTimestamp: number;
+  endTimestamp: number;
 }
 
 interface ErrorData {
@@ -33,6 +53,7 @@ interface ErrorData {
   user_id?: string;
   user_email?: string;
   extra_data: Record<string, any>;
+  session_replay?: ReplayData | null;
   created_at: string;
 }
 
@@ -42,6 +63,15 @@ export class FrankTech {
   captureError(error: Error | string, context?: ErrorContext): void;
   flush(): Promise<void>;
   destroy(): void;
+
+  // Session Replay methods
+  initReplayRecording(): Promise<void>;
+  stopReplayRecording(): void;
+  getReplayData(): ReplayData | null;
+  getReplayEvents(): ReplayEvent[];
+  clearReplayEvents(): void;
+  isReplayEnabled(): boolean;
+  isReplayRecording(): boolean;
 }
 
 export function useFrankTech(config: FrankTechConfig): FrankTech;

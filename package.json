@@ -1,12 +1,13 @@
 {
   "name": "franktech-sdk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "FrankTech SDK for error monitoring - AI-powered error tracking and analysis",
-  "main": "src/index.js",
-  "types": "src/index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
+    "build": "if not exist dist mkdir dist && copy src\\index.js dist\\index.js && copy src\\index.d.ts dist\\index.d.ts",
     "test": "echo \"No tests yet\"",
-    "prepublishOnly": "echo \"Preparing for publish\""
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "error-monitoring",
@@ -37,5 +38,8 @@
   },
   "engines": {
     "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "rrweb": "^2.1.0"
   }
 }
