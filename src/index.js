@@ -21,6 +21,7 @@ class FrankTech {
     this.user = config.user || null;
     this.onError = config.onError || null;
 
+    // Session replay options
     this.enableReplay = config.enableReplay !== false;
     this.replaySampleRate = config.replaySampleRate || 1.0;
     this.replayMaskInputs = config.replayMaskInputs !== false;
@@ -30,11 +31,22 @@ class FrankTech {
     this.replayRecording = false;
     this.replayStopFn = null;
 
+    // Performance monitoring options
+    this.enablePerformance = config.enablePerformance !== false;
+    this.performanceSampleRate = config.performanceSampleRate || 0.5;
+    this.slowRequestThreshold = config.slowRequestThreshold || 1000;
+
     if (this.enabled) {
       this.setupGlobalHandlers();
       this.startBackgroundFlush();
-      if (this.enableReplay && typeof window !== "undefined") {
-        this.initReplayRecording();
+
+      if (typeof window !== "undefined") {
+        if (this.enableReplay) {
+          this.initReplayRecording();
+        }
+        if (this.enablePerformance) {
+          this.setupPerformanceMonitoring();
+        }
       }
     }
   }
@@ -42,6 +54,8 @@ class FrankTech {
   setUser(user) {
     this.user = user;
   }
+
+  // ============ Session Replay Methods ============
 
   async initReplayRecording() {
     if (this.replayRecording || !this.enableReplay) return;
@@ -113,6 +127,123 @@ class FrankTech {
     return this.replayRecording;
   }
 
+  // ============ Performance Monitoring Methods ============
+
+  setupPerformanceMonitoring() {
+    this.interceptRequests();
+    this.monitorPageLoad();
+    this.monitorLongTasks();
+  }
+
+  interceptRequests() {
+    if (typeof window === "undefined") return;
+
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const start = performance.now();
+      try {
+        const response = await originalFetch(...args);
+        const duration = performance.now() - start;
+        this.trackPerformance({
+          type: "api",
+          url: typeof args[0] === "string" ? args[0] : args[0]?.url,
+          method: args[1]?.method || "GET",
+          duration: duration,
+          status: response.status,
+          timestamp: Date.now(),
+        });
+        return response;
+      } catch (error) {
+        const duration = performance.now() - start;
+        this.trackPerformance({
+          type: "api",
+          url: typeof args[0] === "string" ? args[0] : args[0]?.url,
+          method: args[1]?.method || "GET",
+          duration: duration,
+          status: 0,
+          error: error.message,
+          timestamp: Date.now(),
+        });
+        throw error;
+      }
+    };
+  }
+
+  monitorPageLoad() {
+    if (typeof window === "undefined") return;
+
+    if (document.readyState === "complete") {
+      this.sendPageLoadMetrics();
+    } else {
+      window.addEventListener("load", () => {
+        this.sendPageLoadMetrics();
+      });
+    }
+  }
+
+  sendPageLoadMetrics() {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (!nav) return;
+
+    this.trackPerformance({
+      type: "page_load",
+      url: window.location.href,
+      duration: nav.loadEventEnd - nav.startTime,
+      metrics: {
+        ttfb: nav.responseStart - nav.startTime,
+        domContentLoaded: nav.domContentLoadedEventEnd - nav.startTime,
+        loadComplete: nav.loadEventEnd - nav.startTime,
+        firstPaint: performance
+          .getEntriesByType("paint")
+          .find((p) => p.name === "first-paint")?.startTime,
+        firstContentfulPaint: performance
+          .getEntriesByType("paint")
+          .find((p) => p.name === "first-contentful-paint")?.startTime,
+      },
+      timestamp: Date.now(),
+    });
+  }
+
+  monitorLongTasks() {
+    if (typeof PerformanceObserver === "undefined") return;
+
+    const observer = new PerformanceObserver((list) => {
+      list.getEntries().forEach((entry) => {
+        if (entry.duration > 50) {
+          this.trackPerformance({
+            type: "long_task",
+            duration: entry.duration,
+            startTime: entry.startTime,
+            name: entry.name,
+            timestamp: Date.now(),
+          });
+        }
+      });
+    });
+
+    observer.observe({ entryTypes: ["longtask"] });
+  }
+
+  trackPerformance(data) {
+    if (!this.enablePerformance) return;
+    if (Math.random() > this.performanceSampleRate) return;
+
+    this.queue.push({
+      type: "performance",
+      ...data,
+      environment: this.environment,
+      release_version: this.release,
+      user_id: this.user?.id,
+      user_email: this.user?.email,
+    });
+
+    if (this.queue.length >= this.batchSize) {
+      this.flush();
+    }
+  }
+
+  // ============ Error Capture Methods ============
+
   captureError(error, context = {}) {
     if (!this.enabled) return;
 
@@ -183,6 +314,8 @@ class FrankTech {
     }
   }
 
+  // ============ Global Handlers ============
+
   setupGlobalHandlers() {
     if (typeof window === "undefined") return;
 
@@ -213,6 +346,8 @@ class FrankTech {
     }
   }
 
+  // ============ Lifecycle Methods ============
+
   startBackgroundFlush() {
     this.flushTimer = setInterval(() => this.flush(), this.flushInterval);
   }
@@ -223,6 +358,8 @@ class FrankTech {
     this.flush();
   }
 }
+
+// ============ Framework Integrations ============
 
 export function useFrankTech(config) {
   const [monitor] = React.useState(() => new FrankTech(config));
